@@ -25,6 +25,7 @@ bot.on(message("text"), async (ctx, next) => {
     return next();
   }
 
+  console.log("Request Start:", ctx.message.text);
   ctx.react("👀");
 
   const scrapped = await snapsave(ctx.message.text).catch(() => undefined);
@@ -33,7 +34,11 @@ bot.on(message("text"), async (ctx, next) => {
     return ctx.react("👎");
   }
 
-  console.log("Downloading:", scrapped.results.length, "items");
+  console.log(
+    "Downloading:",
+    scrapped.results.length,
+    scrapped.results.length > 1 ? "items" : "item"
+  );
   const downloadPromises = scrapped.results.map(({ url }) =>
     download(url, ctx.message.message_id.toString(), (r) =>
       r.headers.get("content-disposition")?.split(".").at(-1)
@@ -60,6 +65,8 @@ bot.on(message("text"), async (ctx, next) => {
   downloadResults.every((p) => p.status === "fulfilled")
     ? ctx.react("👍")
     : ctx.react("👎");
+
+  console.log("Request End");
 });
 
 bot.on(message("text"), async (ctx, next) => {
@@ -67,6 +74,7 @@ bot.on(message("text"), async (ctx, next) => {
     return next();
   }
 
+  console.log("Request Start:", ctx.message.text);
   ctx.react("👀");
 
   const scrapped = await twitterdl(ctx.message.text).catch(() => undefined);
@@ -77,7 +85,7 @@ bot.on(message("text"), async (ctx, next) => {
 
   const url = scrapped.sort((a, b) => b.bitrate - a.bitrate).at(0)!.url;
 
-  console.log("Downloading:", 1, "items");
+  console.log("Downloading:", 1, "item");
 
   const result = await download(url, ctx.message.message_id.toString(), (r) =>
     getExtension(r.headers.get("content-type") ?? "")
@@ -100,6 +108,8 @@ bot.on(message("text"), async (ctx, next) => {
   if (result) {
     unlink(result.file).catch((err) => console.warn(err));
   }
+
+  console.log("Request End");
 });
 
 export default bot;
@@ -121,12 +131,9 @@ async function download(
     extension ? `${filename}.${extension}` : filename
   );
 
-  const success = await Bun.write(fp, response, {
+  await Bun.write(fp, response, {
     createPath: true,
-  }).then(
-    () => true,
-    () => false
-  );
+  });
 
-  return { file: fp, success };
+  return { file: fp, success: true };
 }
