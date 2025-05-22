@@ -3,7 +3,7 @@ WORKDIR /usr/src/app
 
 # INSTALL
 FROM base AS install
-COPY package.json bun.lock /user/src/app/
+COPY package.json bun.lock /usr/src/app/
 RUN bun install --frozen-lockfile --production
 
 # BUILD
