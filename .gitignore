@@ -1,0 +1,16 @@
+# dependency directories
+node_modules/
+*.tsbuildinfo
+
+# output of 'npm pack'
+*.tgz
+
+# dotenv environment variable files
+.env
+.env.*
+
+# generate output
+dist
+
+# temp files
+.tmp/
