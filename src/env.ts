@@ -9,7 +9,7 @@ const envSchema = z.object({
 });
 
 const result = envSchema.safeParse({
-  NODE_ENV: process.env.NODE_ENV,
+  NODE_ENV: process.env["NODE_ENV"],
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
   TMP_DIR: process.env.TMP_DIR,
 });

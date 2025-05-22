@@ -8,13 +8,13 @@ RUN bun install --frozen-lockfile --production
 
 # BUILD
 FROM base AS build
-ENV NODE_ENV=production
 COPY --from=install /usr/src/app/node_modules node_modules
 COPY . .
 RUN bun run build
 
 # RELEASE
 FROM base AS release
+ENV NODE_ENV=production
 COPY --from=build /usr/src/app/dist/index.js .
 
 # RUN
