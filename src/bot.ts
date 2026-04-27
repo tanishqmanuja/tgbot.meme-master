@@ -47,24 +47,28 @@ bot.on(message("text"), async (ctx, next) => {
     )
   );
   const downloadResults = await Promise.allSettled(downloadPromises);
+  const fulfilledDownloads = downloadResults.filter(isFulfilled);
 
   ctx.react("✍");
 
-  await ctx.replyWithMediaGroup(
-    downloadResults.filter(isFulfilled).map(({ value: { file } }, index) => ({
-      type: file.endsWith(".mp4") ? "video" : "photo",
-      media: Input.fromLocalFile(file),
-      caption: index === 0 ? ctx.message.text : "",
-    }))
+  if (fulfilledDownloads.length === 0) {
+    return ctx.react("👎");
+  }
+
+  const sent = await replyWithDownloadedMedia(
+    ctx,
+    fulfilledDownloads.map(({ value: { file } }) => file),
+    ctx.message.text
+  ).catch((err) => {
+    console.warn("Failed to send Instagram media", err);
+    return false;
+  });
+
+  fulfilledDownloads.forEach(({ value: { file } }) =>
+    unlink(file).catch((err) => console.warn(err))
   );
 
-  downloadResults
-    .filter(isFulfilled)
-    .forEach(({ value: { file } }) =>
-      unlink(file).catch((err) => console.warn(err))
-    );
-
-  downloadResults.every((p) => p.status === "fulfilled")
+  sent && downloadResults.every((p) => p.status === "fulfilled")
     ? ctx.react("👍")
     : ctx.react("👎");
 
@@ -93,20 +97,21 @@ bot.on(message("text"), async (ctx, next) => {
 
   const result = await download(url, ctx.message.message_id.toString(), (r) =>
     getExtension(r.headers.get("content-type") ?? "")
-  ).catch(undefined);
+  ).catch((err) => {
+    console.warn("Twitter download failed", err);
+  });
   ctx.react("✍");
 
   if (!result || !result.success) {
     ctx.react("👎");
   } else {
-    ctx.react("👍");
-    await ctx.replyWithMediaGroup([
-      {
-        type: result.file.endsWith(".mp4") ? "video" : "photo",
-        media: Input.fromLocalFile(result.file),
-        caption: ctx.message.text,
-      },
-    ]);
+    const sent = await replyWithDownloadedMedia(ctx, [result.file], ctx.message.text)
+      .catch((err) => {
+        console.warn("Failed to send Twitter media", err);
+        return false;
+      });
+
+    sent ? ctx.react("👍") : ctx.react("👎");
   }
 
   if (result) {
@@ -126,8 +131,15 @@ async function download(
   ext: ((res: Response) => string | undefined) | string | undefined
 ) {
   const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Download failed with status ${response.status}`);
+  }
 
   const extension = ext instanceof Function ? ext(response) : ext;
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!isSupportedMediaContentType(contentType)) {
+    throw new Error(`Unsupported media content type: ${contentType || "unknown"}`);
+  }
 
   const filename = `${id}-${Bun.randomUUIDv7()}`;
   const fp = path.join(
@@ -140,4 +152,45 @@ async function download(
   });
 
   return { file: fp, success: true };
+}
+
+async function replyWithDownloadedMedia(
+  ctx: Parameters<typeof bot.on>[1] extends (ctx: infer T, next: infer _N) => unknown
+    ? T
+    : never,
+  files: string[],
+  caption: string
+) {
+  if (files.length === 1) {
+    const [file] = files;
+    if (!file) {
+      return false;
+    }
+
+    if (file.endsWith(".mp4")) {
+      await ctx.replyWithVideo(Input.fromLocalFile(file), { caption });
+    } else {
+      await ctx.replyWithPhoto(Input.fromLocalFile(file), { caption });
+    }
+
+    return true;
+  }
+
+  if (files.length >= 2) {
+    await ctx.replyWithMediaGroup(
+      files.map((file, index) => ({
+        type: file.endsWith(".mp4") ? "video" : "photo",
+        media: Input.fromLocalFile(file),
+        caption: index === 0 ? caption : "",
+      }))
+    );
+
+    return true;
+  }
+
+  return false;
+}
+
+function isSupportedMediaContentType(contentType: string) {
+  return contentType.startsWith("image/") || contentType.startsWith("video/");
 }

@@ -51,39 +51,61 @@ export default async function snapsave(url: string) {
   if ($("div.download-items").length) {
     $("div.download-items").each((_, el) => {
       const $el = $(el);
-      const url = $el.find(".download-items__btn > a").attr("href")!;
-      const thumbUrl = new URL(
-        $el.find(".download-items__thumb > img").attr("src")!
+      const rawUrl = $el.find(".download-items__btn > a").attr("href");
+      const url = toAbsoluteUrl(rawUrl);
+      if (!url) {
+        return;
+      }
+
+      const thumbUrl = toAbsoluteUrl(
+        $el.find(".download-items__thumb > img").attr("src")
       );
-      const thumb = thumbUrl.searchParams.get("photo") || thumbUrl.toString();
+      const thumb = thumbUrl
+        ? new URL(thumbUrl).searchParams.get("photo") || thumbUrl
+        : undefined;
+
       results.push({
         thumbnail: thumb,
         url,
       });
     });
   } else if ($("table.table").length) {
-    const thumbnail = $("figure > .image > img").attr("src") || undefined;
+    const thumbnail = toAbsoluteUrl($("figure > .image > img").attr("src"));
     $("tbody > tr").each((_, el) => {
       const $el = $(el);
       const $td = $el.find("td");
       const resolution = $td.eq(0).text();
-      let _url =
+      const rawUrl =
         $td.eq(2).find("a").attr("href") ||
         $td.eq(2).find("button").attr("onclick");
-      const shouldRender = /get_progressApi/gi.test(_url || "");
+      const shouldRender = /get_progressApi/gi.test(rawUrl || "");
+
       if (shouldRender) {
-        _url = /get_progressApi\('(.*?)'\)/.exec(_url || "")?.[1] || _url;
+        return;
       }
+
+      const url = toAbsoluteUrl(rawUrl);
+      if (!url) {
+        return;
+      }
+
       results.push({
         resolution,
         thumbnail,
-        url: _url!,
-        shouldRender,
+        url,
       });
     });
   } else {
-    const thumbnail = $("figure > .image > img").attr("src")!;
-    const url = $("div.column > a").attr("href")!;
+    const thumbnail = toAbsoluteUrl($("figure > .image > img").attr("src"));
+    const url = toAbsoluteUrl($("div.column > a").attr("href"));
+    if (!url) {
+      return SnapSaveOutput.parse({
+        title,
+        description,
+        results,
+      });
+    }
+
     results.push({
       thumbnail,
       url,
@@ -97,4 +119,16 @@ export default async function snapsave(url: string) {
   };
 
   return SnapSaveOutput.parse(result);
+}
+
+function toAbsoluteUrl(value: string | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return new URL(value, "https://snapsave.app").toString();
+  } catch {
+    return undefined;
+  }
 }
