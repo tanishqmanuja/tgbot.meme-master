@@ -3,7 +3,7 @@ import * as cheerio from "cheerio";
 import { z } from "zod/v4";
 
 import { DEFAULT_HEADERS } from "./constants";
-import { decryptSnapSave } from "./utils";
+import { getSnapSaveErrorMessage, getSnapSaveHtmlCandidates } from "./utils";
 
 export const SnapSaveOutput = z.object({
   description: z.string().optional(),
@@ -39,8 +39,15 @@ export default async function snapsave(url: string) {
     }
   );
 
-  const decode = decryptSnapSave(response.data);
-  const $ = cheerio.load(decode);
+  const htmlCandidates = getSnapSaveHtmlCandidates(response.data);
+  if (htmlCandidates.length === 0) {
+    const providerError = getSnapSaveErrorMessage(response.data);
+    throw new Error(
+      providerError || "SnapSave response did not contain recognizable HTML"
+    );
+  }
+
+  const $ = loadBestSnapSaveDocument(htmlCandidates);
   const results: (SnapSaveOutput["results"][number] & {
     shouldRender?: boolean;
   })[] = [];
@@ -119,6 +126,18 @@ export default async function snapsave(url: string) {
   };
 
   return SnapSaveOutput.parse(result);
+}
+
+function loadBestSnapSaveDocument(candidates: string[]) {
+  const documents = candidates.map((candidate) => cheerio.load(candidate));
+  return (
+    documents.find(
+      ($) =>
+        $("div.download-items").length > 0 ||
+        $("table.table").length > 0 ||
+        $("div.column > a").length > 0
+    ) ?? documents[0]!
+  );
 }
 
 function toAbsoluteUrl(value: string | undefined) {

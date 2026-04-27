@@ -9,7 +9,7 @@ import env from "./env";
 import snapsave from "./lib/snapsave";
 import twitterdl from "./lib/twitterdl";
 import { getExtension } from "./utils/mime";
-import { isFulfilled } from "./utils/promises";
+import { isFulfilled, isRejected } from "./utils/promises";
 
 const PKG_NAME = process.env["npm_package_name"] ?? "telegram-meme-bot";
 
@@ -48,6 +48,11 @@ bot.on(message("text"), async (ctx, next) => {
   );
   const downloadResults = await Promise.allSettled(downloadPromises);
   const fulfilledDownloads = downloadResults.filter(isFulfilled);
+  const rejectedDownloads = downloadResults.filter(isRejected);
+
+  rejectedDownloads.forEach((result) =>
+    console.warn("Instagram download failed", result.reason)
+  );
 
   ctx.react("✍");
 
@@ -137,7 +142,7 @@ async function download(
 
   const extension = ext instanceof Function ? ext(response) : ext;
   const contentType = response.headers.get("content-type") ?? "";
-  if (!isSupportedMediaContentType(contentType)) {
+  if (!isSupportedMediaResponse(contentType, extension)) {
     throw new Error(`Unsupported media content type: ${contentType || "unknown"}`);
   }
 
@@ -191,6 +196,21 @@ async function replyWithDownloadedMedia(
   return false;
 }
 
-function isSupportedMediaContentType(contentType: string) {
-  return contentType.startsWith("image/") || contentType.startsWith("video/");
+function isSupportedMediaResponse(
+  contentType: string,
+  extension: string | undefined
+) {
+  if (contentType.startsWith("image/") || contentType.startsWith("video/")) {
+    return true;
+  }
+
+  if (contentType === "application/octet-stream") {
+    return isKnownMediaExtension(extension);
+  }
+
+  return false;
+}
+
+function isKnownMediaExtension(extension: string | undefined) {
+  return extension === "mp4" || extension === "jpg" || extension === "jpeg" || extension === "png";
 }
