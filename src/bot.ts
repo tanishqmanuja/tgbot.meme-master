@@ -1,6 +1,6 @@
 import os from "os";
 import path from "path";
-import { unlink } from "fs/promises";
+import { mkdir, unlink } from "fs/promises";
 
 import { Input, Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
@@ -14,7 +14,8 @@ import { isFulfilled, isRejected } from "./utils/promises";
 const PKG_NAME = process.env["npm_package_name"] ?? "telegram-meme-bot";
 
 const BOT_TOKEN = env.TELEGRAM_BOT_TOKEN;
-const TMP_DIR = env.TMP_DIR || path.join(os.tmpdir(), PKG_NAME);
+const SYSTEM_TMP_DIR = path.join(os.tmpdir(), PKG_NAME);
+const TMP_DIR = env.TMP_DIR || SYSTEM_TMP_DIR;
 
 const bot = new Telegraf(BOT_TOKEN);
 
@@ -135,28 +136,57 @@ async function download(
   id: string,
   ext: ((res: Response) => string | undefined) | string | undefined
 ) {
-  const response = await fetch(url);
+  console.log("Download fetch start");
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(45_000),
+  });
   if (!response.ok) {
     throw new Error(`Download failed with status ${response.status}`);
   }
+  console.log("Download fetch complete", response.status);
 
   const extension = ext instanceof Function ? ext(response) : ext;
   const contentType = response.headers.get("content-type") ?? "";
   if (!isSupportedMediaResponse(contentType, extension)) {
     throw new Error(`Unsupported media content type: ${contentType || "unknown"}`);
   }
+  console.log("Download metadata", {
+    extension,
+    contentType,
+    contentDisposition: response.headers.get("content-disposition"),
+  });
 
   const filename = `${id}-${Bun.randomUUIDv7()}`;
+  const resolvedTmpDir = await ensureTmpDir(TMP_DIR);
   const fp = path.join(
-    TMP_DIR,
+    resolvedTmpDir,
     extension ? `${filename}.${extension}` : filename
   );
 
-  await Bun.write(fp, response, {
+  const bytes = await response.bytes();
+  console.log("Download bytes read", bytes.length);
+
+  await Bun.write(fp, bytes, {
     createPath: true,
   });
+  console.log("Download write complete", fp);
 
   return { file: fp, success: true };
+}
+
+async function ensureTmpDir(dir: string) {
+  try {
+    await mkdir(dir, { recursive: true });
+    return dir;
+  } catch (error) {
+    if (dir === SYSTEM_TMP_DIR) {
+      throw error;
+    }
+
+    console.warn(`Falling back to OS temp dir because ${dir} is not writable`, error);
+    await mkdir(SYSTEM_TMP_DIR, { recursive: true });
+    return SYSTEM_TMP_DIR;
+  }
 }
 
 async function replyWithDownloadedMedia(
