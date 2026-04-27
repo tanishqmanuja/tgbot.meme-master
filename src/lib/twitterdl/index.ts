@@ -7,7 +7,7 @@ import { generateTokenId } from "./utils.js";
 export const TwitterDLVariantSchema = z.object({
   bitrate: z.number().default(0),
   content_type: z.string(),
-  url: z.string().url(),
+  url: z.url(),
   height: z.coerce.string().transform(Number),
   width: z.coerce.string().transform(Number),
 });

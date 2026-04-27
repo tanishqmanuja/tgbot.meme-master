@@ -28,7 +28,9 @@ bot.on(message("text"), async (ctx, next) => {
   console.log("Request Start:", ctx.message.text);
   ctx.react("👀");
 
-  const scrapped = await snapsave(ctx.message.text).catch(() => undefined);
+  const scrapped = await snapsave(ctx.message.text).catch((e) => {
+    console.log("SnapSave Error", e);
+  });
 
   if (!scrapped || scrapped.results.length === 0) {
     return ctx.react("👎");
@@ -77,7 +79,9 @@ bot.on(message("text"), async (ctx, next) => {
   console.log("Request Start:", ctx.message.text);
   ctx.react("👀");
 
-  const scrapped = await twitterdl(ctx.message.text).catch(() => undefined);
+  const scrapped = await twitterdl(ctx.message.text).catch((e) => {
+    console.log("TwitterDL Error", e);
+  });
 
   if (!scrapped || scrapped.length === 0) {
     return ctx.react("👎");

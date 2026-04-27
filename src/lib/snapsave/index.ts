@@ -11,15 +11,15 @@ export const SnapSaveOutput = z.object({
   results: z.array(
     z.object({
       resolution: z.string().optional(),
-      thumbnail: z.string().url().optional(),
-      url: z.string().url(),
+      thumbnail: z.url().optional(),
+      url: z.url(),
     })
   ),
 });
 export type SnapSaveOutput = z.infer<typeof SnapSaveOutput>;
 
 export default async function snapsave(url: string) {
-  url = z.string().url().parse(url);
+  url = z.url().parse(url);
 
   const formData = new URLSearchParams();
   formData.append("url", url);
