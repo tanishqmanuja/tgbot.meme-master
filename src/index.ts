@@ -1,21 +1,34 @@
-import bot from "./bot";
+import bot, { sweepTmp } from "./bot";
 import env from "./env";
 import { obfuscateToken } from "./utils/token";
 
-const BOT_TOKEN = env.TELEGRAM_BOT_TOKEN;
-const IS_PRODUCTION = env.NODE_ENV === "production";
-
 console.log("====== Configuration ======");
-console.log(" - Env:", IS_PRODUCTION ? "PROD" : "DEV");
-console.log(
-  " - Bot token:",
-  IS_PRODUCTION ? obfuscateToken(BOT_TOKEN) : BOT_TOKEN
-);
+console.log(" - Env:", env.NODE_ENV);
+console.log(" - Bot token:", obfuscateToken(env.TELEGRAM_BOT_TOKEN));
 console.log("===========================", "\n");
 
-await bot.launch();
-console.log("⚡ Bot Started");
+await sweepTmp();
 
-// Enable graceful stop
+// launch() long-polls forever, so it never resolves: probe connectivity with
+// getMe instead. Without the backoff a flaky boot becomes a hot restart loop.
+for (let attempt = 1; ; attempt++) {
+  try {
+    const me = await bot.telegram.getMe();
+    bot.launch().catch((error) => {
+      console.error("Bot stopped", error);
+      process.exit(1);
+    });
+    console.log("⚡ Bot Started as", me.username);
+    break;
+  } catch (error) {
+    const delay = Math.min(attempt * 5_000, 60_000);
+    console.error(
+      `Telegram unreachable (attempt ${attempt}), retrying in ${delay}ms`,
+      error
+    );
+    await Bun.sleep(delay);
+  }
+}
+
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));

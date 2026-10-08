@@ -84,6 +84,10 @@ export const FileMimeType = {
   "image/x-portable-graymap": "pgm",
   "audio/x-scpls": "pls",
   "image/png": "png",
+  "image/webp": "webp",
+  "image/avif": "avif",
+  "image/heic": "heic",
+  "image/heif": "heif",
   "image/x-portable-anymap": "pnm",
   "image/x-portable-pixmap": "ppm",
   "application/vnd.ms-powerpoint": "pps",
@@ -138,4 +142,35 @@ export const FileMimeType = {
 
 export function getExtension(mimeType: string) {
   return FileMimeType[mimeType as keyof typeof FileMimeType];
+}
+
+export type MediaKind = "video" | "photo" | "document";
+
+const VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "mov"]);
+const PHOTO_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+
+/**
+ * Extension from the download filename, else the content type, else the URL.
+ * Providers disagree on all three, so try each before giving up.
+ */
+export function resolveExtension(response: Response, url: string) {
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const filename = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1];
+  const fromName = filename?.includes(".")
+    ? filename.split(".").pop()!.toLowerCase()
+    : undefined;
+
+  const fromType = getExtension(
+    (response.headers.get("content-type") ?? "").split(";")[0] ?? ""
+  );
+
+  const fromUrl = /\.([a-z0-9]{2,4})(?:$|[?#])/i.exec(response.url || url)?.[1];
+
+  return fromName || fromType || fromUrl?.toLowerCase();
+}
+
+export function kindOf(extension: string | undefined): MediaKind {
+  if (extension && VIDEO_EXTENSIONS.has(extension)) return "video";
+  if (extension && PHOTO_EXTENSIONS.has(extension)) return "photo";
+  return "document";
 }
